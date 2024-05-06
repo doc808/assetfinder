@@ -16,16 +16,24 @@ import (
 
 func main() {
 	var subsOnly bool
+	var filepath string
 	flag.BoolVar(&subsOnly, "subs-only", false, "Only include subdomains of search domain")
+	flag.StringVar(&filepath, "file", "", "Path to the file containing the list of domains")
 	flag.Parse()
 
-	var domains io.Reader
-	domains = os.Stdin
-
-	domain := flag.Arg(0)
-	if domain != "" {
-		domains = strings.NewReader(domain)
+	if filepath == "" {
+		fmt.Println("Please specify a file path using the -file option")
+		return
 	}
+
+	file, err := os.Open(filepath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error opening file: %s\n", err)
+		return
+	}
+	defer file.Close()
+
+	domains := bufio.NewReader(file)
 
 	sources := []fetchFn{
 		fetchCertSpotter,
@@ -47,7 +55,7 @@ func main() {
 	rl := newRateLimiter(time.Second)
 
 	for sc.Scan() {
-		domain := strings.ToLower(sc.Text())
+		domain := strings.ToLower(sc.Text().TrimSpace())
 
 		// call each of the source workers in a goroutine
 		for _, source := range sources {
@@ -116,7 +124,7 @@ func httpGet(url string) ([]byte, error) {
 func cleanDomain(d string) string {
 	d = strings.ToLower(d)
 
-	// no idea what this is, but we can't clean it ¯\_(ツ)_/¯
+	// Clean domain logic remains unchanged
 	if len(d) < 2 {
 		return d
 	}
@@ -130,7 +138,6 @@ func cleanDomain(d string) string {
 	}
 
 	return d
-
 }
 
 func fetchJSON(url string, wrapper interface{}) error {
@@ -143,3 +150,4 @@ func fetchJSON(url string, wrapper interface{}) error {
 
 	return dec.Decode(wrapper)
 }
+
